@@ -4,9 +4,15 @@ import React, { useState, useMemo } from 'react';
 import { useFarm } from '../context/FarmContext';
 import { calcularEdad, formatearFecha, obtenerDatosServicio, diferenciaDias } from '../lib/calculations';
 
-export default function AnimalDrawer({ animal, onClose }) {
+export default function AnimalDrawer({ animal: animalProp, onClose }) {
     const { farmData, saveFarmData } = useFarm();
     const [activeTab, setActiveTab] = useState('servicio'); // Por defecto 'servicio'
+
+    // Obtener la versión más fresca del animal desde el estado global del predio para actualizar la UI al instante
+    const animal = React.useMemo(() => {
+        if (!animalProp || !farmData || !farmData.animales) return animalProp;
+        return farmData.animales.find(a => a.diio === animalProp.diio) || animalProp;
+    }, [animalProp, farmData]);
 
     // Estados para edición en línea (Inline Editing)
     const [editingIndex, setEditingIndex] = useState(null); // Índice en filasServicio (0 a 4)
