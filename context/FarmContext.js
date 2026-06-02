@@ -345,10 +345,52 @@ export function FarmProvider({ children }) {
             console.error('Error al importar animales:', error);
             alert('Error al importar los datos. Algunos registros podrían no haberse guardado.');
         }
+    // Actualizar el estado reproductivo de un animal
+    const actualizarEstadoAnimal = async (diio, nuevoEstado) => {
+        if (!farmData) return { success: false, message: 'No hay predio cargado.' };
+
+        try {
+            const animal = farmData.animales.find(a => a.diio === diio);
+            if (!animal) return { success: false, message: 'Animal no encontrado.' };
+
+            if (supabase) {
+                const { error } = await supabase
+                    .from('animales')
+                    .update({ estado: nuevoEstado })
+                    .eq('id', animal.id);
+
+                if (error) throw error;
+            } else {
+                const stored = localStorage.getItem('saas_lo_farm_data');
+                if (stored) {
+                    const localData = JSON.parse(stored);
+                    localData.animales = localData.animales.map(a => {
+                        if (a.diio === diio) return { ...a, estado: nuevoEstado };
+                        return a;
+                    });
+                    localStorage.setItem('saas_lo_farm_data', JSON.stringify(localData));
+                }
+            }
+
+            if (supabase) {
+                await loadFarmData();
+            } else {
+                const updatedAnimales = farmData.animales.map(a => {
+                    if (a.diio === diio) return { ...a, estado: nuevoEstado };
+                    return a;
+                });
+                setFarmData({ ...farmData, animales: updatedAnimales });
+            }
+
+            return { success: true };
+        } catch (error) {
+            console.error('Error al actualizar estado del animal:', error);
+            return { success: false, message: 'Error al actualizar el estado.' };
+        }
     };
 
     return (
-        <FarmContext.Provider value={{ farmData, loading, registrarEvento, agregarAnimal, importarAnimales, loadFarmData }}>
+        <FarmContext.Provider value={{ farmData, loading, registrarEvento, agregarAnimal, importarAnimales, loadFarmData, actualizarEstadoAnimal }}>
             {children}
         </FarmContext.Provider>
     );

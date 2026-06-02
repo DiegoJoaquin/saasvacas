@@ -5,8 +5,15 @@ import { useFarm } from '../context/FarmContext';
 import { calcularEdad, formatearFecha, obtenerDatosServicio, diferenciaDias } from '../lib/calculations';
 
 export default function AnimalDrawer({ animal: animalProp, onClose }) {
-    const { farmData, saveFarmData } = useFarm();
+    const { farmData, saveFarmData, actualizarEstadoAnimal } = useFarm();
     const [activeTab, setActiveTab] = useState('servicio'); // Por defecto 'servicio'
+
+    const handleStateChange = async (newState) => {
+        const res = await actualizarEstadoAnimal(animal.diio, newState);
+        if (res && !res.success) {
+            alert(res.message);
+        }
+    };
 
     // Obtener la versión más fresca del animal desde el estado global del predio para actualizar la UI al instante
     const animal = React.useMemo(() => {
@@ -142,36 +149,50 @@ export default function AnimalDrawer({ animal: animalProp, onClose }) {
 
                 {/* Perfil del Animal */}
                 <div style={{ backgroundColor: 'var(--color-bg-main)', padding: '1.2rem', borderRadius: 'var(--border-radius-md)', marginBottom: '1.5rem' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem', fontSize: '0.85rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', fontSize: '0.85rem', alignItems: 'center' }}>
                         <div>
-                            <span style={{ color: 'var(--color-text-muted)' }}>Categoría:</span>
-                            <strong style={{ display: 'block' }}>{animal.categoria}</strong>
+                            <span style={{ color: 'var(--color-text-muted)', display: 'block', marginBottom: '0.2rem' }}>Categoría:</span>
+                            <strong style={{ fontSize: '0.9rem' }}>{animal.categoria}</strong>
                         </div>
                         <div>
-                            <span style={{ color: 'var(--color-text-muted)' }}>Raza:</span>
-                            <strong style={{ display: 'block' }}>{animal.raza}</strong>
+                            <span style={{ color: 'var(--color-text-muted)', display: 'block', marginBottom: '0.2rem' }}>Raza:</span>
+                            <strong style={{ fontSize: '0.9rem' }}>{animal.raza}</strong>
                         </div>
                         <div>
-                            <span style={{ color: 'var(--color-text-muted)' }}>Edad:</span>
-                            <strong style={{ display: 'block' }}>{edad} años</strong>
+                            <span style={{ color: 'var(--color-text-muted)', display: 'block', marginBottom: '0.2rem' }}>Estado:</span>
+                            <select 
+                                value={animal.estado} 
+                                onChange={(e) => handleStateChange(e.target.value)}
+                                style={{
+                                    padding: '0.3rem 0.5rem',
+                                    fontSize: '0.8rem',
+                                    fontWeight: '700',
+                                    borderRadius: '6px',
+                                    border: '1px solid hsl(210, 10%, 80%)',
+                                    backgroundColor: 'white',
+                                    cursor: 'pointer',
+                                    width: '100%',
+                                    outline: 'none'
+                                }}
+                            >
+                                <option value="Vacía">Vacía</option>
+                                <option value="En Encaste">En Encaste</option>
+                                <option value="Preñada">Preñada</option>
+                                <option value="Parida">Parida</option>
+                                <option value="Descartada">Descartada</option>
+                            </select>
                         </div>
                         <div>
-                            <span style={{ color: 'var(--color-text-muted)' }}>F. Nacimiento:</span>
-                            <strong style={{ display: 'block' }}>{fechaNac}</strong>
+                            <span style={{ color: 'var(--color-text-muted)', display: 'block', marginBottom: '0.2rem' }}>Edad:</span>
+                            <strong style={{ fontSize: '0.9rem' }}>{edad} años</strong>
                         </div>
-                        <div style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid hsl(210, 10%, 88%)', paddingTop: '0.6rem', marginTop: '0.2rem' }}>
-                            <div>
-                                <span style={{ color: 'var(--color-text-muted)', display: 'block', marginBottom: '0.2rem' }}>Estado Reproductivo:</span>
-                                <span className={`state-badge ${animal.estado.toLowerCase().replace(/ /g, '_')}`} style={{ display: 'inline-block' }}>
-                                    {animal.estado}
-                                </span>
-                            </div>
-                            <div style={{ textAlign: 'right' }}>
-                                <span style={{ color: 'var(--color-text-muted)', display: 'block' }}>Partos Exitosos Totales:</span>
-                                <strong style={{ display: 'block', fontSize: '1.1rem', color: 'var(--color-state-prenada)' }}>
-                                    {animal.partosExitosos}
-                                </strong>
-                            </div>
+                        <div>
+                            <span style={{ color: 'var(--color-text-muted)', display: 'block', marginBottom: '0.2rem' }}>F. Nacimiento:</span>
+                            <strong style={{ fontSize: '0.9rem' }}>{fechaNac}</strong>
+                        </div>
+                        <div>
+                            <span style={{ color: 'var(--color-text-muted)', display: 'block', marginBottom: '0.2rem' }}>Partos Exitosos Totales:</span>
+                            <strong style={{ fontSize: '0.95rem', color: 'var(--color-state-prenada)' }}>{animal.partosExitosos}</strong>
                         </div>
                     </div>
                 </div>
