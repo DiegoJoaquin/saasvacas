@@ -80,11 +80,18 @@ export function FarmProvider({ children }) {
             }
 
             animal.estado = nuevoEstado;
-            animal.historial.push({
+            const newHistoryItem = {
                 fecha: fechaEvento,
                 tipo: tipo,
                 detalle: detalleEvento
-            });
+            };
+
+            if (tipo === 'Encaste') {
+                newHistoryItem.toro = eventData.metodo;
+                newHistoryItem.inseminador = eventData.inseminador || 'N/R';
+            }
+
+            animal.historial.push(newHistoryItem);
 
             // Ordenar historial
             animal.historial.sort((x, y) => new Date(x.fecha) - new Date(y.fecha));

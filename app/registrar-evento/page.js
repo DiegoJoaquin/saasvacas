@@ -25,6 +25,7 @@ function RegistrarEventoForm() {
     // Encaste fields
     const [encMetodo, setEncMetodo] = useState('Inseminación Artificial');
     const [encPotrero, setEncPotrero] = useState('');
+    const [encInseminador, setEncInseminador] = useState('');
     const [encObs, setEncObs] = useState('');
 
     // Preñez fields
@@ -122,6 +123,7 @@ function RegistrarEventoForm() {
                 eventData = {
                     ...eventData,
                     metodo: encMetodo,
+                    inseminador: encInseminador,
                     potrero: encPotrero || (farmData?.potreros?.[0] || 'Corral'),
                     obs: encObs
                 };
@@ -309,6 +311,16 @@ function RegistrarEventoForm() {
                                                 <option key={p} value={p}>{p}</option>
                                             ))}
                                         </select>
+                                    </div>
+                                    <div className="form-group">
+                                        <label htmlFor="enc-inseminador">Inseminador / Operador</label>
+                                        <input 
+                                            type="text" 
+                                            id="enc-inseminador" 
+                                            placeholder="Ej. Dr. Carter / Operador"
+                                            value={encInseminador}
+                                            onChange={(e) => setEncInseminador(e.target.value)}
+                                        />
                                     </div>
                                     <div className="form-group">
                                         <label htmlFor="enc-obs">Observaciones de Encaste</label>
