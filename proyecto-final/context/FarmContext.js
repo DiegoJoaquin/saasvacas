@@ -345,6 +345,8 @@ export function FarmProvider({ children }) {
             console.error('Error al importar animales:', error);
             alert('Error al importar los datos. Algunos registros podrían no haberse guardado.');
         }
+    };
+
     // Actualizar el estado reproductivo de un animal
     const actualizarEstadoAnimal = async (diio, nuevoEstado) => {
         if (!farmData) return { success: false, message: 'No hay predio cargado.' };
