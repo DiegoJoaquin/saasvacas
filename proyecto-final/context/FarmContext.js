@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 import { getSupabase } from '../lib/supabase';
+import { INITIAL_FARM_DATA } from '../lib/mock-data';
 
 const FarmContext = createContext();
 
@@ -18,6 +19,24 @@ export function FarmProvider({ children }) {
         if (!user) {
             setFarmData(null);
             setPredioId(null);
+            setLoading(false);
+            return;
+        }
+
+        if (!supabase) {
+            const stored = localStorage.getItem('saas_lo_farm_data');
+            if (stored) {
+                try {
+                    setFarmData(JSON.parse(stored));
+                } catch (e) {
+                    console.error("Error al cargar localStorage, cargando datos mock", e);
+                    setFarmData(INITIAL_FARM_DATA);
+                }
+            } else {
+                setFarmData(INITIAL_FARM_DATA);
+                localStorage.setItem('saas_lo_farm_data', JSON.stringify(INITIAL_FARM_DATA));
+            }
+            setPredioId('local-predio-id');
             setLoading(false);
             return;
         }
@@ -151,6 +170,72 @@ export function FarmProvider({ children }) {
     const registrarEvento = async (diio, tipo, eventData) => {
         if (!farmData || !predioId) return;
 
+        if (!supabase) {
+            const updatedAnimales = farmData.animales.map(a => {
+                if (a.diio !== diio) return a;
+
+                const animal = { ...a, historial: [...a.historial] };
+                let nuevoEstado = animal.estado;
+                let detalleEvento = '';
+                const fechaEvento = eventData.fecha;
+
+                switch (tipo) {
+                    case 'Encaste':
+                        nuevoEstado = 'En Encaste';
+                        detalleEvento = `Encaste iniciado con ${eventData.metodo || eventData.toro} en ${eventData.potrero || 'Potrero'}. ${eventData.obs || ''}`;
+                        break;
+                    case 'Preñez':
+                        nuevoEstado = eventData.resultado;
+                        detalleEvento = `Diagnóstico de Preñez: ${eventData.resultado} (${eventData.obs || ''}). Realizado por: ${eventData.veterinario || ''}`;
+                        break;
+                    case 'Parto':
+                        nuevoEstado = 'Parida';
+                        detalleEvento = `Parto (${eventData.facilidad}). Cría: ${eventData.estadoCria} (${eventData.sexo}). DIIO Cría: ${eventData.criaDiio || 'S/D'}. Obs: ${eventData.obs || ''}`;
+                        if (eventData.estadoCria === 'Vivo') {
+                            animal.partosExitosos = (animal.partosExitosos || 0) + 1;
+                        }
+                        if (animal.categoria === 'Vaquilla') {
+                            animal.categoria = 'Vaca';
+                            animal.historial.push({
+                                fecha: fechaEvento,
+                                tipo: 'Evolución',
+                                detalle: 'Cambio automático de categoría: Vaquilla a Vaca al registrar su primer parto.'
+                            });
+                        }
+                        break;
+                    case 'Destete':
+                        nuevoEstado = 'Vacía';
+                        detalleEvento = `Destete completado. Peso estimado cría: ${eventData.peso || 'S/D'} kg. Obs: ${eventData.obs || ''}`;
+                        break;
+                    case 'Descarte':
+                        nuevoEstado = 'Descartada';
+                        detalleEvento = `Descarte por motivo: ${eventData.motivo}. Detalles: ${eventData.obs || ''}`;
+                        break;
+                }
+
+                animal.estado = nuevoEstado;
+                const newHistoryItem = {
+                    fecha: fechaEvento,
+                    tipo: tipo,
+                    detalle: detalleEvento
+                };
+
+                if (tipo === 'Encaste') {
+                    newHistoryItem.toro = eventData.metodo || eventData.toro;
+                    newHistoryItem.inseminador = eventData.inseminador || 'N/R';
+                }
+
+                animal.historial.push(newHistoryItem);
+                animal.historial.sort((x, y) => new Date(x.fecha) - new Date(y.fecha));
+                return animal;
+            });
+
+            const newFarmData = { ...farmData, animales: updatedAnimales };
+            setFarmData(newFarmData);
+            localStorage.setItem('saas_lo_farm_data', JSON.stringify(newFarmData));
+            return;
+        }
+
         try {
             // Encontrar el animal por DIIO
             const animal = farmData.animales.find(a => a.diio === diio);
@@ -250,6 +335,38 @@ export function FarmProvider({ children }) {
     const agregarAnimal = async (nuevoAnimalInfo) => {
         if (!farmData || !predioId) return { success: false, message: 'No hay predio cargado.' };
 
+        if (!supabase) {
+            if (farmData.animales.some(a => a.diio === nuevoAnimalInfo.diio)) {
+                return { success: false, message: 'Ya existe un animal registrado con este número DIIO.' };
+            }
+
+            const nuevoAnimal = {
+                id: `local-animal-${Date.now()}`,
+                diio: nuevoAnimalInfo.diio,
+                categoria: nuevoAnimalInfo.categoria,
+                raza: nuevoAnimalInfo.raza,
+                fechaNacimiento: nuevoAnimalInfo.fechaNacimiento,
+                estado: 'Vacía',
+                partosExitosos: 0,
+                historial: [
+                    {
+                        fecha: new Date().toISOString().split('T')[0],
+                        tipo: 'Registro',
+                        detalle: `Ingreso al inventario predial como ${nuevoAnimalInfo.categoria}. Estado: Vacía.`
+                    }
+                ]
+            };
+
+            const newFarmData = {
+                ...farmData,
+                animales: [...farmData.animales, nuevoAnimal]
+            };
+
+            setFarmData(newFarmData);
+            localStorage.setItem('saas_lo_farm_data', JSON.stringify(newFarmData));
+            return { success: true };
+        }
+
         try {
             // Validar duplicado localmente
             if (farmData.animales.some(a => a.diio === nuevoAnimalInfo.diio)) {
@@ -300,6 +417,16 @@ export function FarmProvider({ children }) {
     // Importar animales desde Excel
     const importarAnimales = async (nuevosAnimales) => {
         if (!farmData || !predioId) return;
+
+        if (!supabase) {
+            const newFarmData = {
+                ...farmData,
+                animales: nuevosAnimales
+            };
+            setFarmData(newFarmData);
+            localStorage.setItem('saas_lo_farm_data', JSON.stringify(newFarmData));
+            return;
+        }
 
         try {
             // Insertar cada animal y sus eventos

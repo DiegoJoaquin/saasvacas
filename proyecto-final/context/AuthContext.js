@@ -12,6 +12,13 @@ export function AuthProvider({ children }) {
     const supabase = getSupabase();
 
     useEffect(() => {
+        if (!supabase) {
+            setUser({ id: 'local-user-id', email: 'offline@predio.com', user_metadata: { full_name: 'Usuario Local' } });
+            setSession({ user: { id: 'local-user-id' } });
+            setLoading(false);
+            return;
+        }
+
         // Obtener la sesión actual al cargar
         const getSession = async () => {
             const { data: { session: currentSession } } = await supabase.auth.getSession();
@@ -32,10 +39,14 @@ export function AuthProvider({ children }) {
         );
 
         return () => subscription.unsubscribe();
-    }, []);
+    }, [supabase]);
 
     // Login con Google OAuth
     const signInWithGoogle = async () => {
+        if (!supabase) {
+            console.log("Mock Google Sign-In");
+            return;
+        }
         const { error } = await supabase.auth.signInWithOAuth({
             provider: 'google',
             options: {
@@ -50,6 +61,11 @@ export function AuthProvider({ children }) {
 
     // Cerrar sesión
     const signOut = async () => {
+        if (!supabase) {
+            setUser(null);
+            setSession(null);
+            return;
+        }
         const { error } = await supabase.auth.signOut();
         if (error) {
             console.error('Error al cerrar sesión:', error.message);
