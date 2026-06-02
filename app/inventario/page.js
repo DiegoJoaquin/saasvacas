@@ -14,8 +14,14 @@ export default function InventarioPage() {
     const [filterCategoria, setFilterCategoria] = useState('Todos');
     const [filterRaza, setFilterRaza] = useState('Todos');
 
-    // Estado para el drawer de detalles
-    const [selectedAnimal, setSelectedAnimal] = useState(null);
+    // Estado para el drawer de detalles (guardamos el DIIO para que sea reactivo al contexto)
+    const [selectedAnimalDiio, setSelectedAnimalDiio] = useState(null);
+
+    // Obtener el animal seleccionado de forma reactiva de los datos frescos del predio
+    const selectedAnimal = useMemo(() => {
+        if (!selectedAnimalDiio || !farmData || !farmData.animales) return null;
+        return farmData.animales.find(a => a.diio === selectedAnimalDiio) || null;
+    }, [selectedAnimalDiio, farmData]);
 
     // Estado para el formulario de nuevo animal
     const [newDiio, setNewDiio] = useState('');
@@ -223,7 +229,7 @@ export default function InventarioPage() {
                             <div 
                                 key={a.diio} 
                                 className="animal-card"
-                                onClick={() => setSelectedAnimal(a)}
+                                onClick={() => setSelectedAnimalDiio(a.diio)}
                             >
                                 <div className="animal-card-header">
                                     <span className="diio-badge">🇨🇱 {a.diio}</span>
@@ -262,7 +268,7 @@ export default function InventarioPage() {
             {/* Ficha / Detalle Animal */}
             <AnimalDrawer 
                 animal={selectedAnimal} 
-                onClose={() => setSelectedAnimal(null)} 
+                onClose={() => setSelectedAnimalDiio(null)} 
             />
         </section>
     );
