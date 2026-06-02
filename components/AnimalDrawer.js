@@ -1,30 +1,44 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
+import { useFarm } from '../context/FarmContext';
 import { calcularEdad, formatearFecha, obtenerDatosServicio, diferenciaDias } from '../lib/calculations';
 
 export default function AnimalDrawer({ animal, onClose }) {
+    const { farmData, saveFarmData } = useFarm();
     const [activeTab, setActiveTab] = useState('servicio'); // Por defecto 'servicio'
 
-    // Obtener y preparar servicios de encaste (Declarado antes de cualquier retorno temprano)
-    const servicios = React.useMemo(() => {
+    // Estados para edición en línea (Inline Editing)
+    const [editingIndex, setEditingIndex] = useState(null); // Índice en filasServicio (0 a 4)
+    const [editFecha, setEditFecha] = useState('');
+    const [editToro, setEditToro] = useState('');
+    const [editInseminador, setEditInseminador] = useState('');
+    const [editLapso, setEditLapso] = useState('');
+
+    // Obtener y preparar servicios de encaste
+    const servicios = useMemo(() => {
         if (!animal || !animal.historial) return [];
         
-        // Filtrar y ordenar eventos de encaste cronológicamente
+        // Filtrar y guardar índice original del historial
         const encastes = animal.historial
+            .map((h, originalIndex) => ({ ...h, originalIndex }))
             .filter(h => h.tipo === 'Encaste')
             .sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
             
-        // Mapear cada evento calculando el lapso inter celo
         return encastes.map((h, index) => {
             const { toro, inseminador } = obtenerDatosServicio(h);
-            let lapso = '-';
-            if (index > 0) {
-                const dias = diferenciaDias(encastes[index - 1].fecha, h.fecha);
-                lapso = `${dias} días`;
+            let lapso = h.lapso; // Usar lapso manual si existe
+            if (!lapso) {
+                if (index > 0) {
+                    const dias = diferenciaDias(encastes[index - 1].fecha, h.fecha);
+                    lapso = `${dias} días`;
+                } else {
+                    lapso = '-';
+                }
             }
             return {
-                fecha: formatearFecha(h.fecha),
+                originalIndex: h.originalIndex,
+                fecha: h.fecha, // Fecha ISO (YYYY-MM-DD) para el input date
                 toro,
                 inseminador,
                 lapso
@@ -32,25 +46,82 @@ export default function AnimalDrawer({ animal, onClose }) {
         });
     }, [animal?.historial]);
 
-    // Crear un arreglo de exactamente 5 elementos (rellenando con vacíos si hay menos de 5)
-    const filasServicio = React.useMemo(() => {
-        if (!animal) return [];
+    // Crear un arreglo de exactamente 5 elementos
+    const filasServicio = useMemo(() => {
         const filas = [...servicios];
         while (filas.length < 5) {
-            filas.push({ fecha: '', toro: '', inseminador: '', lapso: '' });
+            filas.push({ originalIndex: -1, fecha: '', toro: '', inseminador: '', lapso: '' });
         }
-        // Si hay más de 5, mostrar los últimos 5 servicios
         if (filas.length > 5) {
             return filas.slice(-5);
         }
         return filas;
-    }, [servicios, animal]);
+    }, [servicios]);
 
-    // Retorno temprano movido después de declarar todos los React Hooks para cumplir con las Reglas de Hooks
+    // Encontrar el índice de la primera fila vacía para renderizar el botón "+"
+    const firstEmptyIndex = useMemo(() => {
+        return filasServicio.findIndex(f => !f.fecha);
+    }, [filasServicio]);
+
     if (!animal) return null;
 
     const edad = calcularEdad(animal.fechaNacimiento);
     const fechaNac = formatearFecha(animal.fechaNacimiento);
+
+    const handleStartEditing = (index, fila) => {
+        setEditingIndex(index);
+        setEditFecha(fila.fecha || new Date().toISOString().split('T')[0]);
+        setEditToro(fila.toro || '');
+        setEditInseminador(fila.inseminador || '');
+        setEditLapso(fila.lapso || '');
+    };
+
+    const handleCancelEditing = () => {
+        setEditingIndex(null);
+    };
+
+    const handleSaveService = (index) => {
+        if (!editFecha) {
+            alert('Debe ingresar una fecha.');
+            return;
+        }
+
+        const fila = filasServicio[index];
+        const clonedFarmData = JSON.parse(JSON.stringify(farmData));
+        const activeAnimal = clonedFarmData.animales.find(a => a.diio === animal.diio);
+
+        if (!activeAnimal) return;
+
+        if (fila.originalIndex !== undefined && fila.originalIndex !== null && fila.originalIndex !== -1) {
+            // Edición de fila existente
+            const eventIndex = fila.originalIndex;
+            activeAnimal.historial[eventIndex].fecha = editFecha;
+            activeAnimal.historial[eventIndex].toro = editToro;
+            activeAnimal.historial[eventIndex].inseminador = editInseminador || 'N/R';
+            activeAnimal.historial[eventIndex].lapso = editLapso;
+            activeAnimal.historial[eventIndex].detalle = `Encaste iniciado con ${editToro}. Inseminador: ${editInseminador || 'N/R'}.`;
+        } else {
+            // Adición de nueva fila (Encaste)
+            const nuevoEncaste = {
+                fecha: editFecha,
+                tipo: 'Encaste',
+                detalle: `Encaste iniciado con ${editToro}. Inseminador: ${editInseminador || 'N/R'}.`,
+                toro: editToro,
+                inseminador: editInseminador || 'N/R',
+                lapso: editLapso
+            };
+            activeAnimal.estado = 'En Encaste';
+            activeAnimal.historial.push(nuevoEncaste);
+        }
+
+        // Ordenar historial por fecha
+        activeAnimal.historial.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+
+        // Guardar cambios en el contexto global / LocalStorage
+        saveFarmData(clonedFarmData);
+        setEditingIndex(null);
+        alert('Registro guardado correctamente.');
+    };
 
     return (
         <div className="drawer-overlay active" onClick={onClose}>
@@ -88,11 +159,11 @@ export default function AnimalDrawer({ animal, onClose }) {
                     </div>
                 </div>
 
-                {/* Menú de pestañas (Tabs) para separar las secciones */}
+                {/* Menú de pestañas (Tabs) */}
                 <div style={{ display: 'flex', borderBottom: '1px solid hsl(210, 10%, 88%)', marginBottom: '1.5rem', gap: '0.5rem' }}>
                     <button 
                         type="button"
-                        onClick={() => setActiveTab('servicio')} 
+                        onClick={() => { setActiveTab('servicio'); setEditingIndex(null); }} 
                         style={{
                             flex: 1,
                             padding: '0.8rem',
@@ -111,7 +182,7 @@ export default function AnimalDrawer({ animal, onClose }) {
                     </button>
                     <button 
                         type="button"
-                        onClick={() => setActiveTab('historial')} 
+                        onClick={() => { setActiveTab('historial'); setEditingIndex(null); }} 
                         style={{
                             flex: 1,
                             padding: '0.8rem',
@@ -130,7 +201,7 @@ export default function AnimalDrawer({ animal, onClose }) {
                     </button>
                 </div>
 
-                {/* Contenido dinámico según la pestaña activa */}
+                {/* Contenido dinámico */}
                 {activeTab === 'servicio' && (
                     <div>
                         <h4 style={{ marginBottom: '0.8rem' }}>Registro por Servicio (Últimos 5 encastes)</h4>
@@ -142,17 +213,112 @@ export default function AnimalDrawer({ animal, onClose }) {
                                         <th style={{ padding: '0.6rem', textAlign: 'left', fontWeight: '700' }}>Toro</th>
                                         <th style={{ padding: '0.6rem', textAlign: 'left', fontWeight: '700' }}>Inseminador</th>
                                         <th style={{ padding: '0.6rem', textAlign: 'left', fontWeight: '700' }}>Lapso Inter Celo</th>
+                                        {editingIndex !== null && <th style={{ padding: '0.6rem', textAlign: 'center', fontWeight: '700' }}>Acción</th>}
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {filasServicio.map((fila, index) => (
-                                        <tr key={index} style={{ borderBottom: '1px solid hsl(210, 10%, 92%)', height: '35px' }}>
-                                            <td style={{ padding: '0.6rem' }}>{fila.fecha || <span style={{ color: 'transparent' }}>-</span>}</td>
-                                            <td style={{ padding: '0.6rem' }}>{fila.toro}</td>
-                                            <td style={{ padding: '0.6rem' }}>{fila.inseminador}</td>
-                                            <td style={{ padding: '0.6rem', color: 'var(--color-accent)', fontWeight: fila.lapso !== '-' ? '600' : 'normal' }}>{fila.lapso}</td>
-                                        </tr>
-                                    ))}
+                                    {filasServicio.map((fila, index) => {
+                                        const isEditing = editingIndex === index;
+                                        const isFirstEmpty = index === firstEmptyIndex;
+                                        const isAfterEmpty = index > firstEmptyIndex && firstEmptyIndex !== -1;
+
+                                        if (isEditing) {
+                                            return (
+                                                <tr key={index} style={{ borderBottom: '1px solid hsl(210, 10%, 92%)' }}>
+                                                    <td style={{ padding: '0.4rem' }}>
+                                                        <input 
+                                                            type="date" 
+                                                            value={editFecha} 
+                                                            onChange={(e) => setEditFecha(e.target.value)} 
+                                                            style={{ padding: '0.4rem', fontSize: '0.8rem', width: '110px' }}
+                                                        />
+                                                    </td>
+                                                    <td style={{ padding: '0.4rem' }}>
+                                                        <input 
+                                                            type="text" 
+                                                            value={editToro} 
+                                                            onChange={(e) => setEditToro(e.target.value)} 
+                                                            placeholder="Toro/IA"
+                                                            style={{ padding: '0.4rem', fontSize: '0.8rem', width: '90px' }}
+                                                        />
+                                                    </td>
+                                                    <td style={{ padding: '0.4rem' }}>
+                                                        <input 
+                                                            type="text" 
+                                                            value={editInseminador} 
+                                                            onChange={(e) => setEditInseminador(e.target.value)} 
+                                                            placeholder="Inseminador"
+                                                            style={{ padding: '0.4rem', fontSize: '0.8rem', width: '90px' }}
+                                                        />
+                                                    </td>
+                                                    <td style={{ padding: '0.4rem' }}>
+                                                        <input 
+                                                            type="text" 
+                                                            value={editLapso} 
+                                                            onChange={(e) => setEditLapso(e.target.value)} 
+                                                            placeholder="Ej. 21 días"
+                                                            style={{ padding: '0.4rem', fontSize: '0.8rem', width: '90px' }}
+                                                        />
+                                                    </td>
+                                                    <td style={{ padding: '0.4rem', textAlign: 'center', display: 'flex', gap: '0.3rem', justifyContent: 'center', height: '100%' }}>
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={() => handleSaveService(index)}
+                                                            style={{ border: 'none', background: 'var(--color-state-prenada)', color: 'white', padding: '0.2rem 0.5rem', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+                                                            title="Guardar"
+                                                        >
+                                                            ✔
+                                                        </button>
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={handleCancelEditing}
+                                                            style={{ border: 'none', background: 'var(--color-state-descarte)', color: 'white', padding: '0.2rem 0.5rem', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+                                                            title="Cancelar"
+                                                        >
+                                                            ✖
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        }
+
+                                        if (isFirstEmpty) {
+                                            return (
+                                                <tr key={index} style={{ borderBottom: '1px solid hsl(210, 10%, 92%)', height: '35px' }}>
+                                                    <td colSpan={editingIndex !== null ? 5 : 4} style={{ padding: '0.6rem', textAlign: 'center', cursor: 'pointer', color: 'var(--color-accent)', fontWeight: '700' }} onClick={() => handleStartEditing(index, fila)}>
+                                                        ➕ Registrar / Agregar Encaste
+                                                    </td>
+                                                </tr>
+                                            );
+                                        }
+
+                                        if (isAfterEmpty) {
+                                            return (
+                                                <tr key={index} style={{ borderBottom: '1px solid hsl(210, 10%, 92%)', height: '35px' }}>
+                                                    <td style={{ padding: '0.6rem', color: 'transparent' }}>-</td>
+                                                    <td style={{ padding: '0.6rem' }}></td>
+                                                    <td style={{ padding: '0.6rem' }}></td>
+                                                    <td style={{ padding: '0.6rem' }}></td>
+                                                    {editingIndex !== null && <td style={{ padding: '0.6rem' }}></td>}
+                                                </tr>
+                                            );
+                                        }
+
+                                        return (
+                                            <tr 
+                                                key={index} 
+                                                style={{ borderBottom: '1px solid hsl(210, 10%, 92%)', height: '35px', cursor: 'pointer' }}
+                                                onClick={() => handleStartEditing(index, fila)}
+                                                title="Haga clic para editar esta fila"
+                                            >
+                                                <td style={{ padding: '0.6rem' }}>{formatearFecha(fila.fecha)} ✏️</td>
+                                                <td style={{ padding: '0.6rem' }}>{fila.toro}</td>
+                                                <td style={{ padding: '0.6rem' }}>{fila.inseminador}</td>
+                                                <td style={{ padding: '0.6rem', color: 'var(--color-accent)', fontWeight: fila.lapso !== '-' ? '600' : 'normal' }}>{fila.lapso}</td>
+                                                {editingIndex !== null && <td style={{ padding: '0.6rem' }}></td>}
+                                            </tr>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>
