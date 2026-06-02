@@ -12,6 +12,7 @@ export default function InventarioPage() {
     const [searchVal, setSearchVal] = useState('');
     const [filterEstado, setFilterEstado] = useState('Todos');
     const [filterCategoria, setFilterCategoria] = useState('Todos');
+    const [filterRaza, setFilterRaza] = useState('Todos');
 
     // Estado para el drawer de detalles
     const [selectedAnimal, setSelectedAnimal] = useState(null);
@@ -24,18 +25,25 @@ export default function InventarioPage() {
 
     const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
 
+    // Extraer razas únicas existentes en el rebaño de forma dinámica
+    const uniqueRazas = useMemo(() => {
+        if (!farmData || !farmData.animales) return [];
+        const razas = farmData.animales.map(a => a.raza).filter(Boolean);
+        return ['Todos', ...Array.from(new Set(razas))].sort();
+    }, [farmData]);
+
     // Filtrar animales
     const animalesFiltrados = useMemo(() => {
         if (!farmData || !farmData.animales) return [];
 
         return farmData.animales.filter(a => {
-            const matchSearch = a.diio.toLowerCase().includes(searchVal.toLowerCase()) || 
-                                a.raza.toLowerCase().includes(searchVal.toLowerCase());
+            const matchSearch = a.diio.toLowerCase().includes(searchVal.toLowerCase());
+            const matchRaza = filterRaza === 'Todos' || a.raza === filterRaza;
             const matchEstado = filterEstado === 'Todos' || a.estado === filterEstado;
             const matchCategoria = filterCategoria === 'Todos' || a.categoria === filterCategoria;
-            return matchSearch && matchEstado && matchCategoria;
+            return matchSearch && matchRaza && matchEstado && matchCategoria;
         });
-    }, [farmData, searchVal, filterEstado, filterCategoria]);
+    }, [farmData, searchVal, filterRaza, filterEstado, filterCategoria]);
 
     const handleAddAnimalSubmit = (e) => {
         e.preventDefault();
@@ -150,15 +158,26 @@ export default function InventarioPage() {
             {/* Buscador e Inventario */}
             <div className="controls-bar">
                 <div className="search-input-wrapper">
-                    <span className="search-icon" role="img" aria-label="search">🔍</span>
                     <input 
                         type="text" 
                         id="search-diio" 
-                        placeholder="Buscar por DIIO o Raza..."
+                        placeholder="Ingresar DIIO..."
+                        style={{ paddingLeft: '1rem' }}
                         value={searchVal}
                         onChange={(e) => setSearchVal(e.target.value)}
                     />
                 </div>
+                <select 
+                    id="filter-raza" 
+                    className="filter-select"
+                    value={filterRaza}
+                    onChange={(e) => setFilterRaza(e.target.value)}
+                >
+                    <option value="Todos">Todas las Razas</option>
+                    {uniqueRazas.filter(r => r !== 'Todos').map(raza => (
+                        <option key={raza} value={raza}>{raza}</option>
+                    ))}
+                </select>
                 <select 
                     id="filter-estado" 
                     className="filter-select"
