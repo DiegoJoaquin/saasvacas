@@ -4,15 +4,29 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useFarm } from '../context/FarmContext';
+import { useAuth } from '../context/AuthContext';
 
 export default function Sidebar() {
     const pathname = usePathname();
     const { farmData, loading } = useFarm();
+    const { user, signOut } = useAuth();
 
     // Obtener información del predio
-    const predioName = farmData ? farmData.predioName : "Fundo Río Bueno";
-    const region = farmData ? farmData.region : "Región de Los Ríos";
-    const avatar = predioName ? predioName.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase() : "FR";
+    const predioName = farmData ? farmData.predioName : "Cargando predio...";
+    const region = farmData ? farmData.region : "";
+
+    // Info del usuario autenticado
+    const userName = user?.user_metadata?.full_name || user?.email || 'Usuario';
+    const userAvatar = user?.user_metadata?.avatar_url || null;
+    const userInitials = userName.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
+
+    const handleSignOut = async () => {
+        try {
+            await signOut();
+        } catch (err) {
+            console.error('Error al cerrar sesión:', err);
+        }
+    };
 
     const menuItems = [
         {
@@ -96,13 +110,73 @@ export default function Sidebar() {
             </div>
             
             <div className="sidebar-footer">
+                {/* Info del usuario autenticado */}
                 <div className="predio-info">
-                    <div className="predio-avatar">{loading ? '..' : avatar}</div>
+                    <div className="predio-avatar" style={{
+                        overflow: 'hidden',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                    }}>
+                        {userAvatar ? (
+                            <img 
+                                src={userAvatar} 
+                                alt={userName}
+                                style={{ 
+                                    width: '100%', 
+                                    height: '100%', 
+                                    objectFit: 'cover',
+                                    borderRadius: 'inherit'
+                                }} 
+                                referrerPolicy="no-referrer"
+                            />
+                        ) : (
+                            userInitials
+                        )}
+                    </div>
                     <div className="predio-details">
-                        <h4>{loading ? 'Cargando...' : predioName}</h4>
-                        <p>{loading ? 'Ubicación...' : region}</p>
+                        <h4>{loading ? 'Cargando...' : userName}</h4>
+                        <p>{loading ? '' : predioName}</p>
                     </div>
                 </div>
+
+                {/* Botón cerrar sesión */}
+                <button 
+                    onClick={handleSignOut}
+                    type="button"
+                    style={{
+                        width: '100%',
+                        marginTop: '0.8rem',
+                        padding: '0.5rem 0.8rem',
+                        fontSize: '0.8rem',
+                        fontWeight: '500',
+                        color: '#cbd5e1',
+                        backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                        border: '1px solid rgba(255, 255, 255, 0.12)',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.4rem',
+                        transition: 'all 0.2s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                        e.target.style.backgroundColor = 'rgba(239, 68, 68, 0.2)';
+                        e.target.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+                        e.target.style.color = '#fca5a5';
+                    }}
+                    onMouseLeave={(e) => {
+                        e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
+                        e.target.style.borderColor = 'rgba(255, 255, 255, 0.12)';
+                        e.target.style.color = '#cbd5e1';
+                    }}
+                >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
+                    </svg>
+                    Cerrar Sesión
+                </button>
             </div>
         </aside>
     );

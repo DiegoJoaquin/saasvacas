@@ -1,47 +1,169 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { INITIAL_FARM_DATA } from '../lib/mock-data';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { useAuth } from './AuthContext';
+import { getSupabase } from '../lib/supabase';
 
 const FarmContext = createContext();
 
 export function FarmProvider({ children }) {
+    const { user, session } = useAuth();
     const [farmData, setFarmData] = useState(null);
+    const [predioId, setPredioId] = useState(null);
     const [loading, setLoading] = useState(true);
+    const supabase = getSupabase();
 
-    // Cargar desde LocalStorage
-    useEffect(() => {
-        const stored = localStorage.getItem('saas_lo_farm_data');
-        if (stored) {
-            try {
-                setFarmData(JSON.parse(stored));
-            } catch (e) {
-                console.error("Error al cargar LocalStorage, cargando datos mock", e);
-                setFarmData(INITIAL_FARM_DATA);
-            }
-        } else {
-            setFarmData(INITIAL_FARM_DATA);
-            localStorage.setItem('saas_lo_farm_data', JSON.stringify(INITIAL_FARM_DATA));
+    // Cargar datos del predio desde Supabase cuando el usuario está autenticado
+    const loadFarmData = useCallback(async () => {
+        if (!user) {
+            setFarmData(null);
+            setPredioId(null);
+            setLoading(false);
+            return;
         }
-        setLoading(false);
-    }, []);
 
-    // Guardar en LocalStorage cada vez que cambie farmData
-    const saveFarmData = (newData) => {
-        setFarmData(newData);
-        localStorage.setItem('saas_lo_farm_data', JSON.stringify(newData));
-    };
+        try {
+            setLoading(true);
 
-    const registrarEvento = (diio, tipo, eventData) => {
-        if (!farmData) return;
+            // 1. Buscar o crear el predio del usuario
+            let { data: predios, error: predioError } = await supabase
+                .from('predios')
+                .select('*')
+                .eq('user_id', user.id);
 
-        const updatedAnimales = farmData.animales.map(a => {
-            if (a.diio !== diio) return a;
+            if (predioError) throw predioError;
 
-            // Clonar animal para no mutar el estado directamente
-            const animal = { ...a, historial: [...a.historial] };
+            let predio;
+            if (!predios || predios.length === 0) {
+                // Crear predio por defecto para el usuario nuevo
+                const userName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Mi Predio';
+                const { data: newPredio, error: createError } = await supabase
+                    .from('predios')
+                    .insert({
+                        user_id: user.id,
+                        nombre: `Predio de ${userName}`,
+                        comuna: '',
+                        region: ''
+                    })
+                    .select()
+                    .single();
+
+                if (createError) throw createError;
+                predio = newPredio;
+
+                // Crear potreros por defecto
+                await supabase.from('potreros').insert([
+                    { predio_id: predio.id, nombre: 'Potrero Principal' },
+                    { predio_id: predio.id, nombre: 'Corral Central' }
+                ]);
+            } else {
+                predio = predios[0];
+            }
+
+            setPredioId(predio.id);
+
+            // 2. Cargar animales del predio
+            const { data: animales, error: animalesError } = await supabase
+                .from('animales')
+                .select('*')
+                .eq('predio_id', predio.id)
+                .order('created_at', { ascending: true });
+
+            if (animalesError) throw animalesError;
+
+            // 3. Cargar eventos de todos los animales
+            const animalIds = (animales || []).map(a => a.id);
+            let eventos = [];
+            if (animalIds.length > 0) {
+                const { data: eventosData, error: eventosError } = await supabase
+                    .from('eventos')
+                    .select('*')
+                    .in('animal_id', animalIds)
+                    .order('fecha', { ascending: true });
+
+                if (eventosError) throw eventosError;
+                eventos = eventosData || [];
+            }
+
+            // 4. Cargar toros y potreros
+            const { data: toros } = await supabase
+                .from('toros')
+                .select('*')
+                .eq('predio_id', predio.id);
+
+            const { data: potreros } = await supabase
+                .from('potreros')
+                .select('*')
+                .eq('predio_id', predio.id);
+
+            // 5. Construir farmData con la misma estructura que antes
+            const animalesConHistorial = (animales || []).map(a => {
+                const historial = eventos
+                    .filter(e => e.animal_id === a.id)
+                    .map(e => ({
+                        id: e.id,
+                        fecha: e.fecha,
+                        tipo: e.tipo,
+                        detalle: e.detalle || '',
+                        toro: e.toro,
+                        inseminador: e.inseminador
+                    }));
+
+                return {
+                    id: a.id,
+                    diio: a.diio,
+                    categoria: a.categoria,
+                    raza: a.raza,
+                    fechaNacimiento: a.fecha_nacimiento,
+                    estado: a.estado,
+                    partosExitosos: a.partos_exitosos || 0,
+                    historial
+                };
+            });
+
+            setFarmData({
+                predioId: predio.id,
+                predioName: predio.nombre,
+                comuna: predio.comuna || '',
+                region: predio.region || '',
+                toros: (toros || []).map(t => ({
+                    id: t.id,
+                    name: t.nombre,
+                    diio: t.diio || ''
+                })),
+                potreros: (potreros || []).map(p => p.nombre),
+                animales: animalesConHistorial
+            });
+
+        } catch (error) {
+            console.error('Error al cargar datos del predio:', error);
+            setFarmData(null);
+        } finally {
+            setLoading(false);
+        }
+    }, [user, supabase]);
+
+    useEffect(() => {
+        loadFarmData();
+    }, [loadFarmData]);
+
+    // Registrar un evento reproductivo en Supabase
+    const registrarEvento = async (diio, tipo, eventData) => {
+        if (!farmData || !predioId) return;
+
+        try {
+            // Encontrar el animal por DIIO
+            const animal = farmData.animales.find(a => a.diio === diio);
+            if (!animal) {
+                console.error('Animal no encontrado:', diio);
+                return;
+            }
+
+            // Determinar nuevo estado
             let nuevoEstado = animal.estado;
             let detalleEvento = '';
+            let incrementPartos = false;
+            let cambiarCategoria = false;
             const fechaEvento = eventData.fecha;
 
             switch (tipo) {
@@ -57,16 +179,10 @@ export function FarmProvider({ children }) {
                     nuevoEstado = 'Parida';
                     detalleEvento = `Parto (${eventData.facilidad}). Cría: ${eventData.estadoCria} (${eventData.sexo}). DIIO Cría: ${eventData.criaDiio || 'S/D'}. Obs: ${eventData.obs || ''}`;
                     if (eventData.estadoCria === 'Vivo') {
-                        animal.partosExitosos = (animal.partosExitosos || 0) + 1;
+                        incrementPartos = true;
                     }
-                    // Si el animal es una Vaquilla y tuvo un parto exitoso, se convierte en Vaca
                     if (animal.categoria === 'Vaquilla') {
-                        animal.categoria = 'Vaca';
-                        animal.historial.push({
-                            fecha: fechaEvento,
-                            tipo: 'Evolución',
-                            detalle: 'Cambio automático de categoría: Vaquilla a Vaca al registrar su primer parto.'
-                        });
+                        cambiarCategoria = true;
                     }
                     break;
                 case 'Destete':
@@ -79,73 +195,160 @@ export function FarmProvider({ children }) {
                     break;
             }
 
-            animal.estado = nuevoEstado;
-            const newHistoryItem = {
+            // 1. Insertar evento en Supabase
+            const eventoInsert = {
+                animal_id: animal.id,
                 fecha: fechaEvento,
                 tipo: tipo,
                 detalle: detalleEvento
             };
 
             if (tipo === 'Encaste') {
-                newHistoryItem.toro = eventData.metodo;
-                newHistoryItem.inseminador = eventData.inseminador || 'N/R';
+                eventoInsert.toro = eventData.metodo;
+                eventoInsert.inseminador = eventData.inseminador || 'N/R';
             }
 
-            animal.historial.push(newHistoryItem);
+            const { error: eventoError } = await supabase
+                .from('eventos')
+                .insert(eventoInsert);
 
-            // Ordenar historial
-            animal.historial.sort((x, y) => new Date(x.fecha) - new Date(y.fecha));
-            return animal;
-        });
+            if (eventoError) throw eventoError;
 
-        saveFarmData({
-            ...farmData,
-            animales: updatedAnimales
-        });
-    };
+            // 2. Actualizar estado del animal
+            const updateData = { estado: nuevoEstado };
+            if (incrementPartos) {
+                updateData.partos_exitosos = (animal.partosExitosos || 0) + 1;
+            }
+            if (cambiarCategoria) {
+                updateData.categoria = 'Vaca';
+                // Insertar evento de evolución
+                await supabase.from('eventos').insert({
+                    animal_id: animal.id,
+                    fecha: fechaEvento,
+                    tipo: 'Evolución',
+                    detalle: 'Cambio automático de categoría: Vaquilla a Vaca al registrar su primer parto.'
+                });
+            }
 
-    const agregarAnimal = (nuevoAnimalInfo) => {
-        if (!farmData) return false;
+            const { error: updateError } = await supabase
+                .from('animales')
+                .update(updateData)
+                .eq('id', animal.id);
 
-        // Validar duplicado
-        if (farmData.animales.some(a => a.diio === nuevoAnimalInfo.diio)) {
-            return { success: false, message: 'Ya existe un animal registrado con este número DIIO.' };
+            if (updateError) throw updateError;
+
+            // 3. Recargar datos
+            await loadFarmData();
+
+        } catch (error) {
+            console.error('Error al registrar evento:', error);
+            alert('Error al registrar el evento. Intente de nuevo.');
         }
-
-        const nuevoAnimal = {
-            diio: nuevoAnimalInfo.diio,
-            categoria: nuevoAnimalInfo.categoria,
-            raza: nuevoAnimalInfo.raza,
-            fechaNacimiento: nuevoAnimalInfo.fechaNacimiento,
-            estado: 'Vacía',
-            partosExitosos: 0,
-            historial: [
-                {
-                    fecha: new Date().toISOString().split('T')[0],
-                    tipo: 'Registro',
-                    detalle: `Ingreso al inventario predial como ${nuevoAnimalInfo.categoria}. Estado: Vacía.`
-                }
-            ]
-        };
-
-        saveFarmData({
-            ...farmData,
-            animales: [...farmData.animales, nuevoAnimal]
-        });
-
-        return { success: true };
     };
 
-    const importarAnimales = (nuevosAnimales) => {
-        if (!farmData) return;
-        saveFarmData({
-            ...farmData,
-            animales: nuevosAnimales
-        });
+    // Agregar un nuevo animal al predio
+    const agregarAnimal = async (nuevoAnimalInfo) => {
+        if (!farmData || !predioId) return { success: false, message: 'No hay predio cargado.' };
+
+        try {
+            // Validar duplicado localmente
+            if (farmData.animales.some(a => a.diio === nuevoAnimalInfo.diio)) {
+                return { success: false, message: 'Ya existe un animal registrado con este número DIIO.' };
+            }
+
+            // Insertar animal en Supabase
+            const { data: newAnimal, error: insertError } = await supabase
+                .from('animales')
+                .insert({
+                    predio_id: predioId,
+                    diio: nuevoAnimalInfo.diio,
+                    categoria: nuevoAnimalInfo.categoria,
+                    raza: nuevoAnimalInfo.raza,
+                    fecha_nacimiento: nuevoAnimalInfo.fechaNacimiento,
+                    estado: 'Vacía',
+                    partos_exitosos: 0
+                })
+                .select()
+                .single();
+
+            if (insertError) {
+                if (insertError.code === '23505') {
+                    return { success: false, message: 'Ya existe un animal registrado con este número DIIO.' };
+                }
+                throw insertError;
+            }
+
+            // Insertar evento de registro
+            await supabase.from('eventos').insert({
+                animal_id: newAnimal.id,
+                fecha: new Date().toISOString().split('T')[0],
+                tipo: 'Registro',
+                detalle: `Ingreso al inventario predial como ${nuevoAnimalInfo.categoria}. Estado: Vacía.`
+            });
+
+            // Recargar datos
+            await loadFarmData();
+
+            return { success: true };
+
+        } catch (error) {
+            console.error('Error al agregar animal:', error);
+            return { success: false, message: 'Error al guardar en la base de datos.' };
+        }
+    };
+
+    // Importar animales desde Excel
+    const importarAnimales = async (nuevosAnimales) => {
+        if (!farmData || !predioId) return;
+
+        try {
+            // Insertar cada animal y sus eventos
+            for (const animal of nuevosAnimales) {
+                const { data: inserted, error: insertError } = await supabase
+                    .from('animales')
+                    .upsert({
+                        predio_id: predioId,
+                        diio: animal.diio,
+                        categoria: animal.categoria,
+                        raza: animal.raza,
+                        fecha_nacimiento: animal.fechaNacimiento,
+                        estado: animal.estado,
+                        partos_exitosos: animal.partosExitosos || 0
+                    }, { onConflict: 'predio_id,diio' })
+                    .select()
+                    .single();
+
+                if (insertError) {
+                    console.error(`Error al importar DIIO ${animal.diio}:`, insertError);
+                    continue;
+                }
+
+                // Insertar historial si existe
+                if (animal.historial && animal.historial.length > 0) {
+                    const eventosInsert = animal.historial.map(h => ({
+                        animal_id: inserted.id,
+                        fecha: h.fecha,
+                        tipo: h.tipo,
+                        detalle: h.detalle || '',
+                        toro: h.toro || null,
+                        inseminador: h.inseminador || null
+                    }));
+
+                    await supabase.from('eventos').insert(eventosInsert);
+                }
+            }
+
+            // Recargar datos
+            await loadFarmData();
+
+        } catch (error) {
+            console.error('Error al importar animales:', error);
+            alert('Error al importar los datos. Algunos registros podrían no haberse guardado.');
+        }
     };
 
     return (
-        <FarmContext.Provider value={{ farmData, loading, registrarEvento, agregarAnimal, importarAnimales, saveFarmData }}>
+        <FarmContext.Provider value={{ farmData, loading, registrarEvento, agregarAnimal, importarAnimales, loadFarmData }}>
             {children}
         </FarmContext.Provider>
     );

@@ -1,6 +1,6 @@
 import "./globals.css";
-import { FarmProvider } from "../context/FarmContext";
-import Sidebar from "../components/Sidebar";
+import { AuthProvider } from "../context/AuthContext";
+import AppShell from "../components/AppShell";
 
 export const metadata = {
   title: "SaaS LO - Control Reproductivo Bovino",
@@ -14,14 +14,9 @@ export default function RootLayout({ children }) {
         <link rel="icon" href="/favicon.ico" />
       </head>
       <body>
-        <FarmProvider>
-          <div className="app-container">
-            <Sidebar />
-            <main className="main-content">
-              {children}
-            </main>
-          </div>
-        </FarmProvider>
+        <AuthProvider>
+          <AppShell>{children}</AppShell>
+        </AuthProvider>
       </body>
     </html>
   );
