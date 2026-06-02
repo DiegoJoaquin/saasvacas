@@ -4,16 +4,11 @@ import React, { useState } from 'react';
 import { calcularEdad, formatearFecha, obtenerDatosServicio, diferenciaDias } from '../lib/calculations';
 
 export default function AnimalDrawer({ animal, onClose }) {
-    const [activeTab, setActiveTab] = useState('servicio'); // Por defecto 'servicio' como pide el usuario
+    const [activeTab, setActiveTab] = useState('servicio'); // Por defecto 'servicio'
 
-    if (!animal) return null;
-
-    const edad = calcularEdad(animal.fechaNacimiento);
-    const fechaNac = formatearFecha(animal.fechaNacimiento);
-
-    // Obtener y preparar servicios de encaste
+    // Obtener y preparar servicios de encaste (Declarado antes de cualquier retorno temprano)
     const servicios = React.useMemo(() => {
-        if (!animal.historial) return [];
+        if (!animal || !animal.historial) return [];
         
         // Filtrar y ordenar eventos de encaste cronológicamente
         const encastes = animal.historial
@@ -35,10 +30,11 @@ export default function AnimalDrawer({ animal, onClose }) {
                 lapso
             };
         });
-    }, [animal.historial]);
+    }, [animal?.historial]);
 
     // Crear un arreglo de exactamente 5 elementos (rellenando con vacíos si hay menos de 5)
     const filasServicio = React.useMemo(() => {
+        if (!animal) return [];
         const filas = [...servicios];
         while (filas.length < 5) {
             filas.push({ fecha: '', toro: '', inseminador: '', lapso: '' });
@@ -48,7 +44,13 @@ export default function AnimalDrawer({ animal, onClose }) {
             return filas.slice(-5);
         }
         return filas;
-    }, [servicios]);
+    }, [servicios, animal]);
+
+    // Retorno temprano movido después de declarar todos los React Hooks para cumplir con las Reglas de Hooks
+    if (!animal) return null;
+
+    const edad = calcularEdad(animal.fechaNacimiento);
+    const fechaNac = formatearFecha(animal.fechaNacimiento);
 
     return (
         <div className="drawer-overlay active" onClick={onClose}>
