@@ -66,7 +66,6 @@ h1, h2, h3, h4 {
     color: white;
     padding: 2.5rem 1.5rem;
     display: flex;
-    flex-column: column;
     flex-direction: column;
     justify-content: space-between;
     box-shadow: 4px 0 20px rgba(0, 0, 0, 0.15);
@@ -185,12 +184,8 @@ h1, h2, h3, h4 {
 }
 
 .view-section {
-    display: none;
-    animation: fadeIn 0.4s ease;
-}
-
-.view-section.active {
     display: block;
+    animation: fadeIn 0.4s ease;
 }
 
 @keyframes fadeIn {
