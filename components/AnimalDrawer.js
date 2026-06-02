@@ -1,9 +1,11 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { calcularEdad, formatearFecha, obtenerDatosServicio, diferenciaDias } from '../lib/calculations';
 
 export default function AnimalDrawer({ animal, onClose }) {
+    const [activeTab, setActiveTab] = useState('servicio'); // Por defecto 'servicio' como pide el usuario
+
     if (!animal) return null;
 
     const edad = calcularEdad(animal.fechaNacimiento);
@@ -57,7 +59,7 @@ export default function AnimalDrawer({ animal, onClose }) {
                 </div>
 
                 {/* Perfil del Animal */}
-                <div style={{ backgroundColor: 'var(--color-bg-main)', padding: '1.2rem', borderRadius: 'var(--border-radius-md)', marginBottom: '2rem' }}>
+                <div style={{ backgroundColor: 'var(--color-bg-main)', padding: '1.2rem', borderRadius: 'var(--border-radius-md)', marginBottom: '1.5rem' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem', fontSize: '0.85rem' }}>
                         <div>
                             <span style={{ color: 'var(--color-text-muted)' }}>Categoría:</span>
@@ -84,50 +86,99 @@ export default function AnimalDrawer({ animal, onClose }) {
                     </div>
                 </div>
 
-                {/* Registro por Servicio */}
-                <h4 style={{ marginBottom: '0.8rem' }}>Registro por Servicio</h4>
-                <div style={{ marginBottom: '2rem', overflowX: 'auto' }}>
-                    <table className="service-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-                        <thead>
-                            <tr style={{ backgroundColor: 'var(--color-bg-main)', borderBottom: '2px solid hsl(210, 10%, 88%)' }}>
-                                <th style={{ padding: '0.6rem', textAlign: 'left', fontWeight: '700' }}>Fecha</th>
-                                <th style={{ padding: '0.6rem', textAlign: 'left', fontWeight: '700' }}>Toro</th>
-                                <th style={{ padding: '0.6rem', textAlign: 'left', fontWeight: '700' }}>Inseminador</th>
-                                <th style={{ padding: '0.6rem', textAlign: 'left', fontWeight: '700' }}>Lapso Inter Celo</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filasServicio.map((fila, index) => (
-                                <tr key={index} style={{ borderBottom: '1px solid hsl(210, 10%, 92%)', height: '35px' }}>
-                                    <td style={{ padding: '0.6rem' }}>{fila.fecha || <span style={{ color: 'transparent' }}>-</span>}</td>
-                                    <td style={{ padding: '0.6rem' }}>{fila.toro}</td>
-                                    <td style={{ padding: '0.6rem' }}>{fila.inseminador}</td>
-                                    <td style={{ padding: '0.6rem', color: 'var(--color-accent)', fontWeight: fila.lapso !== '-' ? '600' : 'normal' }}>{fila.lapso}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                {/* Menú de pestañas (Tabs) para separar las secciones */}
+                <div style={{ display: 'flex', borderBottom: '1px solid hsl(210, 10%, 88%)', marginBottom: '1.5rem', gap: '0.5rem' }}>
+                    <button 
+                        type="button"
+                        onClick={() => setActiveTab('servicio')} 
+                        style={{
+                            flex: 1,
+                            padding: '0.8rem',
+                            border: 'none',
+                            borderBottom: activeTab === 'servicio' ? '3px solid var(--color-accent)' : '3px solid transparent',
+                            backgroundColor: 'transparent',
+                            fontWeight: '700',
+                            color: activeTab === 'servicio' ? 'var(--color-accent)' : 'var(--color-text-muted)',
+                            cursor: 'pointer',
+                            fontFamily: 'var(--font-heading)',
+                            fontSize: '0.9rem',
+                            transition: 'var(--transition-smooth)'
+                        }}
+                    >
+                        📋 Registro por Servicio
+                    </button>
+                    <button 
+                        type="button"
+                        onClick={() => setActiveTab('historial')} 
+                        style={{
+                            flex: 1,
+                            padding: '0.8rem',
+                            border: 'none',
+                            borderBottom: activeTab === 'historial' ? '3px solid var(--color-accent)' : '3px solid transparent',
+                            backgroundColor: 'transparent',
+                            fontWeight: '700',
+                            color: activeTab === 'historial' ? 'var(--color-accent)' : 'var(--color-text-muted)',
+                            cursor: 'pointer',
+                            fontFamily: 'var(--font-heading)',
+                            fontSize: '0.9rem',
+                            transition: 'var(--transition-smooth)'
+                        }}
+                    >
+                        🩺 Historial Clínico
+                    </button>
                 </div>
 
-                {/* Línea de Tiempo */}
-                <h4>Historial Clínico Reproductivo</h4>
-                <div className="timeline">
-                    {!animal.historial || animal.historial.length === 0 ? (
-                        <p style={{ color: 'var(--color-text-muted)' }}>Sin historial registrado.</p>
-                    ) : (
-                        [...animal.historial].reverse().map((h, index) => {
-                            const itemClass = h.tipo.toLowerCase().replace(/ /g, '_');
-                            return (
-                                <div key={index} className={`timeline-item ${itemClass}`}>
-                                    <div className="timeline-dot"></div>
-                                    <div className="timeline-date">{formatearFecha(h.fecha)}</div>
-                                    <div className="timeline-title">{h.tipo}</div>
-                                    <div className="timeline-details">{h.detalle}</div>
-                                </div>
-                            );
-                        })
-                    )}
-                </div>
+                {/* Contenido dinámico según la pestaña activa */}
+                {activeTab === 'servicio' && (
+                    <div>
+                        <h4 style={{ marginBottom: '0.8rem' }}>Registro por Servicio (Últimos 5 encastes)</h4>
+                        <div style={{ overflowX: 'auto' }}>
+                            <table className="service-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                                <thead>
+                                    <tr style={{ backgroundColor: 'var(--color-bg-main)', borderBottom: '2px solid hsl(210, 10%, 88%)' }}>
+                                        <th style={{ padding: '0.6rem', textAlign: 'left', fontWeight: '700' }}>Fecha</th>
+                                        <th style={{ padding: '0.6rem', textAlign: 'left', fontWeight: '700' }}>Toro</th>
+                                        <th style={{ padding: '0.6rem', textAlign: 'left', fontWeight: '700' }}>Inseminador</th>
+                                        <th style={{ padding: '0.6rem', textAlign: 'left', fontWeight: '700' }}>Lapso Inter Celo</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {filasServicio.map((fila, index) => (
+                                        <tr key={index} style={{ borderBottom: '1px solid hsl(210, 10%, 92%)', height: '35px' }}>
+                                            <td style={{ padding: '0.6rem' }}>{fila.fecha || <span style={{ color: 'transparent' }}>-</span>}</td>
+                                            <td style={{ padding: '0.6rem' }}>{fila.toro}</td>
+                                            <td style={{ padding: '0.6rem' }}>{fila.inseminador}</td>
+                                            <td style={{ padding: '0.6rem', color: 'var(--color-accent)', fontWeight: fila.lapso !== '-' ? '600' : 'normal' }}>{fila.lapso}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'historial' && (
+                    <div>
+                        <h4 style={{ marginBottom: '0.8rem' }}>Historial Clínico Reproductivo</h4>
+                        <div className="timeline">
+                            {!animal.historial || animal.historial.length === 0 ? (
+                                <p style={{ color: 'var(--color-text-muted)' }}>Sin historial registrado.</p>
+                            ) : (
+                                [...animal.historial].reverse().map((h, index) => {
+                                    const itemClass = h.tipo.toLowerCase().replace(/ /g, '_');
+                                    return (
+                                        <div key={index} className={`timeline-item ${itemClass}`}>
+                                            <div className="timeline-dot"></div>
+                                            <div className="timeline-date">{formatearFecha(h.fecha)}</div>
+                                            <div className="timeline-title">{h.tipo}</div>
+                                            <div className="timeline-details">{h.details || h.detalle}</div>
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
