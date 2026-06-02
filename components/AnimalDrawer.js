@@ -132,9 +132,12 @@ export default function AnimalDrawer({ animal: animalProp, onClose }) {
     return (
         <div className="drawer-overlay active" onClick={onClose}>
             <div className="drawer-content" onClick={(e) => e.stopPropagation()}>
-                <div className="drawer-header">
-                    <h3>Ficha Animal: DIIO {animal.diio}</h3>
-                    <button className="btn-close" onClick={onClose}>&times;</button>
+                <div className="drawer-header" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <h3 style={{ margin: 0 }}>Ficha Animal: DIIO {animal.diio}</h3>
+                    <span className={`state-badge ${animal.estado.toLowerCase().replace(/ /g, '_')}`}>
+                        {animal.estado}
+                    </span>
+                    <button className="btn-close" style={{ marginLeft: 'auto' }} onClick={onClose}>&times;</button>
                 </div>
 
                 {/* Perfil del Animal */}
@@ -156,11 +159,19 @@ export default function AnimalDrawer({ animal: animalProp, onClose }) {
                             <span style={{ color: 'var(--color-text-muted)' }}>F. Nacimiento:</span>
                             <strong style={{ display: 'block' }}>{fechaNac}</strong>
                         </div>
-                        <div style={{ gridColumn: 'span 2', borderTop: '1px solid hsl(210, 10%, 88%)', paddingTop: '0.6rem', marginTop: '0.2rem' }}>
-                            <span style={{ color: 'var(--color-text-muted)' }}>Partos Exitosos Totales:</span>
-                            <strong style={{ display: 'block', fontSize: '1.1rem', color: 'var(--color-state-prenada)' }}>
-                                {animal.partosExitosos}
-                            </strong>
+                        <div style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid hsl(210, 10%, 88%)', paddingTop: '0.6rem', marginTop: '0.2rem' }}>
+                            <div>
+                                <span style={{ color: 'var(--color-text-muted)', display: 'block', marginBottom: '0.2rem' }}>Estado Reproductivo:</span>
+                                <span className={`state-badge ${animal.estado.toLowerCase().replace(/ /g, '_')}`} style={{ display: 'inline-block' }}>
+                                    {animal.estado}
+                                </span>
+                            </div>
+                            <div style={{ textAlign: 'right' }}>
+                                <span style={{ color: 'var(--color-text-muted)', display: 'block' }}>Partos Exitosos Totales:</span>
+                                <strong style={{ display: 'block', fontSize: '1.1rem', color: 'var(--color-state-prenada)' }}>
+                                    {animal.partosExitosos}
+                                </strong>
+                            </div>
                         </div>
                     </div>
                 </div>
